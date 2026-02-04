@@ -19,21 +19,28 @@ const APIFY_API_BASE = 'https://api.apify.com/v2';
 
 export class ApifyClient {
   private token: string;
-  private actorId: string;
+  private defaultActorId?: string;
 
-  constructor(token?: string, actorId?: string) {
+  constructor(token?: string, defaultActorId?: string) {
     const config = getConfig();
     this.token = token || config.apify.token;
-    this.actorId = actorId || config.apify.actorId;
+    this.defaultActorId = defaultActorId;
   }
 
   /**
    * Start an actor run
    */
-  async startRun(input: ApifyActorInput): Promise<ApifyStartRunResponse> {
-    const url = `${APIFY_API_BASE}/acts/${this.actorId}/runs?token=${this.token}`;
+  async startRun(input: ApifyActorInput, actorId?: string): Promise<ApifyStartRunResponse> {
+    const targetActorId = actorId || this.defaultActorId;
+    if (!targetActorId) {
+      throw new Error('Actor ID must be provided either in constructor or method call');
+    }
 
-    logInfo(`Starting Apify run for actor: ${this.actorId}`, { input });
+    // Replace / with ~ in actor ID for API URL (e.g., clockworks/actor -> clockworks~actor)
+    const actorIdForUrl = targetActorId.replace('/', '~');
+    const url = `${APIFY_API_BASE}/acts/${actorIdForUrl}/runs?token=${this.token}`;
+
+    logInfo(`Starting Apify run for actor: ${targetActorId}`, { input });
 
     return await retryNetwork(async () => {
       const response = await fetch(url, {
@@ -144,7 +151,8 @@ export class ApifyClient {
    */
   async executeScrapeRun(
     profileHandle: string,
-    maxVideos: number = 50
+    maxVideos: number = 50,
+    actorId?: string
   ): Promise<{
     runId: string;
     status: ApifyRunStatus;
@@ -157,7 +165,7 @@ export class ApifyClient {
       maxVideos,
       resultsPerPage: 200,
       sections: ['videos'],
-    });
+    }, actorId);
 
     const runId = startResponse.data.id;
     const datasetId = startResponse.data.defaultDatasetId;

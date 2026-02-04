@@ -47,21 +47,51 @@ export function groupVideosByCategory(
 export function generateReportText(
   videos: VideoDocument[],
   profileHandle: string,
-  targetDate: string // YYYY-MM-DD format for yesterday
+  targetDate: string, // YYYY-MM-DD format for yesterday
+  actorUsed?: 'primary' | 'fallback',
+  warningFlags?: string[],
+  emptyDay?: boolean,
+  emptyDayStreak?: number
 ): string {
   const config = getConfig();
   const timezone = config.scraper.timezone;
   const date = new Date().toISOString();
 
-  // Handle empty results
+  // Handle empty results (v2.1.0 - Enhanced with empty day detection)
   if (videos.length === 0) {
-    logWarning('No videos to include in report');
+    // Distinguish between "quiet day" (ok) and technical failure (error)
+    const hasDataQualityIssue = warningFlags?.includes('DATA_QUALITY_ISSUE') || false;
+    const hasTechnicalFailure = warningFlags?.includes('ZERO_RESULTS') || 
+                                warningFlags?.includes('PRIMARY_FAILED') || false;
+    
+    // Determine if this is a legitimate quiet day
+    const isQuietDay = emptyDay === true && !hasDataQualityIssue && !hasTechnicalFailure;
+    
+    let reasonText: string;
+    if (isQuietDay) {
+      // Legitimate quiet day - provide clear message
+      reasonText = 'לא פורסמו סרטוני TikTok ביום זה.';
+      if (emptyDayStreak && emptyDayStreak > 1) {
+        reasonText += `\n\n📊 מידע: זה יום ריק ${emptyDayStreak} ברצף.`;
+      }
+      logInfo('Empty report - Quiet day (holiday/Shabbat)', { targetDate, emptyDayStreak });
+    } else if (hasDataQualityIssue) {
+      // Data quality issue - different message
+      reasonText = 'נמצאו בעיות באיכות הנתונים - ייתכן שיש תקלה טכנית.';
+      logWarning('Empty report - Data quality issue', { targetDate, warningFlags });
+    } else {
+      // Technical failure
+      reasonText = 'לא נמצאו סרטונים מיום אתמול - ייתכן שיש תקלה טכנית.';
+      logWarning('Empty report - Technical failure', { targetDate, warningFlags });
+    }
+    
     return generateEmptyReport(
       profileHandle,
       date,
       targetDate,
       timezone,
-      'לא נמצאו סרטונים מיום אתמול'
+      reasonText,
+      actorUsed
     );
   }
 
@@ -71,7 +101,7 @@ export function generateReportText(
 
   // Header
   parts.push(
-    generateReportHeader(profileHandle, date, targetDate, videos.length, timezone)
+    generateReportHeader(profileHandle, date, targetDate, videos.length, timezone, actorUsed)
   );
 
   // Group by category
@@ -94,6 +124,33 @@ export function generateReportText(
     warnings.push(`מספר סרטונים נמוך (${videos.length}) - ייתכן שיש בעיה`);
   }
 
+  // Add system warning flags
+  if (warningFlags && warningFlags.length > 0) {
+    const uniqueFlags = [...new Set(warningFlags)];
+    uniqueFlags.forEach(flag => {
+      switch (flag) {
+        case 'CIRCUIT_BREAKER_SUPPRESSED':
+          warnings.push('Circuit Breaker חסם את ה-fallback actor (הגנת עלויות)');
+          break;
+        case 'PRIMARY_FAILED':
+          warnings.push('Primary actor נכשל, נעשה שימוש ב-fallback');
+          break;
+        case 'ZERO_RESULTS':
+          warnings.push('לא נמצאו סרטונים מאתמול');
+          break;
+        case 'LOW_RESULTS':
+          warnings.push('מספר תוצאות נמוך מהצפוי');
+          break;
+        case 'MISSING_VIDEO_URL':
+          warnings.push('חלק מהסרטונים חסרים URL');
+          break;
+        case 'MISSING_CREATE_TIME':
+          warnings.push('חלק מהסרטונים חסרים זמן יצירה');
+          break;
+      }
+    });
+  }
+
   if (warnings.length > 0) {
     parts.push(generateWarningSection(warnings));
   }
@@ -105,27 +162,47 @@ export function generateReportText(
 }
 
 /**
- * Create report document
+ * Create report document (v2.1.0 - Enhanced with empty day tracking)
  */
 export function createReportDocument(
   videos: VideoDocument[],
   profileHandle: string,
   targetDate: string, // YYYY-MM-DD for yesterday
-  maxPosts: number
+  maxPosts: number,
+  actorUsed: 'primary' | 'fallback' = 'primary',
+  warningFlags: string[] = [],
+  emptyDay: boolean = false,
+  emptyDayStreak: number = 0
 ): ReportDocument {
-  const reportText = generateReportText(videos, profileHandle, targetDate);
+  const reportText = generateReportText(
+    videos, 
+    profileHandle, 
+    targetDate, 
+    actorUsed, 
+    warningFlags,
+    emptyDay,
+    emptyDayStreak
+  );
   const videoIds = videos.map(v => v.videoId);
   
-  // Determine status
+  // Determine status (v2.1.0 - improved logic)
   let status: 'ok' | 'warning' | 'error' = 'ok';
-  let warningMessage: string | undefined;
 
   if (videos.length === 0) {
-    status = 'error';
-    warningMessage = `No videos found for ${targetDate}`;
-  } else if (videos.length < 5) {
+    // Check if it's a legitimate quiet day
+    const hasDataQualityIssue = warningFlags.includes('DATA_QUALITY_ISSUE');
+    const hasTechnicalFailure = warningFlags.includes('ZERO_RESULTS') || 
+                                warningFlags.includes('PRIMARY_FAILED');
+    
+    if (emptyDay && !hasDataQualityIssue && !hasTechnicalFailure) {
+      // Legitimate quiet day - status OK
+      status = 'ok';
+    } else {
+      // Technical failure or data quality issue
+      status = 'error';
+    }
+  } else if (videos.length < 5 || warningFlags.length > 0) {
     status = 'warning';
-    warningMessage = `Low video count: ${videos.length} for ${targetDate}`;
   }
 
   const reportDoc: ReportDocument = {
@@ -137,10 +214,13 @@ export function createReportDocument(
     text: reportText,
     videoIds,
     status,
-    warningMessage,
+    actorUsed,
+    warningFlags,
+    emptyDay,
+    emptyDayStreak,
   };
 
-  logInfo(`Report generated: ${status} - ${videos.length} videos from ${targetDate}`);
+  logInfo(`Report generated: ${status} - ${videos.length} videos from ${targetDate} (actor: ${actorUsed}, emptyDay: ${emptyDay}, streak: ${emptyDayStreak})`);
 
   return reportDoc;
 }

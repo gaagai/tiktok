@@ -216,6 +216,67 @@ export function alertPipelineCrashed(error: Error, stage?: string): void {
 }
 
 /**
+ * Alert: Fallback triggered
+ */
+export function alertFallbackTriggered(
+  reason: string,
+  actorUsed: 'primary' | 'fallback',
+  allowed: boolean,
+  runId?: string
+): void {
+  const level = allowed ? AlertLevel.WARNING : AlertLevel.ERROR;
+  const message = allowed
+    ? `Fallback actor triggered and RUNNING - Reason: ${reason}`
+    : `Fallback actor triggered but BLOCKED - Reason: ${reason}`;
+
+  sendAlert(level, message, {
+    runId,
+    reason,
+    actorUsed,
+    allowed,
+  });
+}
+
+/**
+ * Alert: Circuit breaker blocked fallback
+ */
+export function alertCircuitBreakerBlocked(
+  reportDate: string,
+  profileHandle: string,
+  fallbacksIn48h: number
+): void {
+  sendAlert(
+    AlertLevel.ERROR,
+    'Circuit Breaker BLOCKED fallback actor (cost protection)',
+    {
+      reportDate,
+      profileHandle,
+      fallbacksIn48h,
+      message: 'Fallback actor was needed but blocked due to cost limits',
+    }
+  );
+}
+
+/**
+ * Alert: Normalization warnings
+ */
+export function alertNormalizationWarnings(
+  videoId: string,
+  warnings: string[],
+  actorId: string
+): void {
+  sendAlert(
+    AlertLevel.WARNING,
+    `Normalization warnings for video ${videoId}`,
+    {
+      videoId,
+      actorId,
+      warnings,
+    }
+  );
+}
+
+/**
  * Log info message
  */
 export function logInfo(message: string, meta?: any): void {
@@ -246,6 +307,33 @@ export function logError(message: string, error?: Error, meta?: any): void {
 export function logSuccess(message: string, meta?: any): void {
   logger.info(`✅ ${message}`, { success: true, ...meta });
   console.log(`✅ ${message}`);
+}
+
+/**
+ * Alert: Suspicious empty day streak (v2.1.0)
+ */
+export function alertEmptyDayStreak(
+  profileHandle: string,
+  reportDate: string,
+  streak: number
+): void {
+  const message = `⚠️ SUSPICIOUS_EMPTY_STREAK: @${profileHandle} has ${streak} consecutive empty days ending on ${reportDate}`;
+  
+  logger.warn(message, {
+    event: 'suspicious_empty_streak',
+    level: 'WARNING',
+    profileHandle,
+    reportDate,
+    emptyDayStreak: streak,
+    recommendation: streak >= 5 
+      ? 'Manual investigation required - consider running fallback actor'
+      : 'Monitor situation - may be extended holiday period',
+  });
+  
+  console.warn(`\n⚠️  ${message}`);
+  console.warn(`   Recommendation: ${streak >= 5 
+    ? 'URGENT - Manual investigation required' 
+    : 'Monitor situation'}\n`);
 }
 
 /**

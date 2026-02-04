@@ -3,7 +3,7 @@
  */
 
 import mongoose, { Schema, Model } from 'mongoose';
-import { VideoDocument, RunDocument, ReportDocument } from '../types/index.js';
+import { VideoDocument, RunDocument, ReportDocument, LockDocument } from '../types/index.js';
 
 // Video Schema
 const videoSchema = new Schema<VideoDocument>(
@@ -52,6 +52,12 @@ const videoSchema = new Schema<VideoDocument>(
       required: true,
       default: 'Latest',
     },
+    actorUsed: {
+      type: String,
+      enum: ['primary', 'fallback'],
+      required: false,
+      default: 'primary',
+    },
     rawData: {
       type: Schema.Types.Mixed,
       required: false,
@@ -85,6 +91,11 @@ const runSchema = new Schema<RunDocument>(
       required: true,
       index: true,
     },
+    reportDate: {
+      type: String,
+      required: false,
+      index: true,
+    },
     startedAt: {
       type: Date,
       required: true,
@@ -98,6 +109,33 @@ const runSchema = new Schema<RunDocument>(
       type: String,
       enum: ['SUCCEEDED', 'FAILED', 'PARTIAL'],
       required: true,
+    },
+    actorUsed: {
+      type: String,
+      enum: ['primary', 'fallback'],
+      required: false,
+      default: 'primary',
+    },
+    fallbackReason: {
+      type: String,
+      enum: ['FAILED', 'ZERO_RESULTS', 'LOW_RESULTS', null],
+      required: false,
+      default: null,
+    },
+    circuitBreakerSuppressed: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    itemsFetchedRaw: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+    itemsInRange: {
+      type: Number,
+      required: false,
+      default: 0,
     },
     itemsFetched: {
       type: Number,
@@ -122,6 +160,31 @@ const runSchema = new Schema<RunDocument>(
       type: String,
       required: true,
     },
+    warningFlags: {
+      type: [String],
+      required: false,
+      default: [],
+    },
+    // Data Quality metrics (v2.1.0)
+    missingCreateTimePct: {
+      type: Number,
+      required: false,
+    },
+    missingUrlPct: {
+      type: Number,
+      required: false,
+    },
+    // Empty Day tracking (v2.1.0)
+    emptyDay: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    emptyDayStreak: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -131,7 +194,9 @@ const runSchema = new Schema<RunDocument>(
 
 // Create indexes
 runSchema.index({ profileHandle: 1, startedAt: -1 });
+runSchema.index({ profileHandle: 1, reportDate: -1 });
 runSchema.index({ status: 1 });
+runSchema.index({ actorUsed: 1 });
 
 // Report Schema
 const reportSchema = new Schema<ReportDocument>(
@@ -174,7 +239,43 @@ const reportSchema = new Schema<ReportDocument>(
       required: true,
       default: 'ok',
     },
-    warningMessage: {
+    actorUsed: {
+      type: String,
+      enum: ['primary', 'fallback'],
+      required: false,
+      default: 'primary',
+    },
+    warningFlags: {
+      type: [String],
+      required: false,
+      default: [],
+    },
+    // Empty Day tracking (v2.1.0)
+    emptyDay: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
+    emptyDayStreak: {
+      type: Number,
+      required: false,
+      default: 0,
+    },
+    // Email tracking (v2.2.0)
+    emailStatus: {
+      type: String,
+      enum: ['PENDING', 'SENT', 'FAILED'],
+      required: false,
+    },
+    emailSentAt: {
+      type: Date,
+      required: false,
+    },
+    emailMessageId: {
+      type: String,
+      required: false,
+    },
+    emailError: {
       type: String,
       required: false,
     },
@@ -187,6 +288,33 @@ const reportSchema = new Schema<ReportDocument>(
 
 // Create compound unique index for reportDate + profileHandle
 reportSchema.index({ reportDate: 1, profileHandle: 1 }, { unique: true });
+
+// Lock Schema (v2.1.0 - Concurrency Protection)
+const lockSchema = new Schema<LockDocument>(
+  {
+    _id: {
+      type: String,
+      required: true,
+    },
+    lockedAt: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+      index: true, // TTL index
+    },
+  },
+  {
+    timestamps: false,
+    collection: 'locks',
+  }
+);
+
+// TTL index - automatically removes expired locks
+lockSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Export models
 export const Video: Model<VideoDocument> = mongoose.model<VideoDocument>(
@@ -204,6 +332,11 @@ export const Report: Model<ReportDocument> = mongoose.model<ReportDocument>(
   reportSchema
 );
 
+export const Lock: Model<LockDocument> = mongoose.model<LockDocument>(
+  'Lock',
+  lockSchema
+);
+
 /**
  * Create all indexes
  */
@@ -213,6 +346,7 @@ export async function createIndexes(): Promise<void> {
     Video.createIndexes(),
     Run.createIndexes(),
     Report.createIndexes(),
+    Lock.createIndexes(),
   ]);
   console.log('✅ Database indexes created');
 }

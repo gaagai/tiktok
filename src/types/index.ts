@@ -2,6 +2,10 @@
  * Shared TypeScript types for the TikTok scraper system
  */
 
+// Actor Types
+export type ActorType = 'primary' | 'fallback';
+export type FallbackReason = 'FAILED' | 'ZERO_RESULTS' | 'LOW_RESULTS' | null;
+
 // Apify Types
 export interface ApifyRunInput {
   profiles: string[];
@@ -58,6 +62,24 @@ export interface TikTokVideo {
   mentions?: string[];
 }
 
+// Normalized Video (after normalization layer)
+export interface NormalizedVideo {
+  videoId: string;
+  text: string;
+  webVideoUrl: string;
+  createTimeISO: string;
+  metrics: {
+    playCount: number;
+    diggCount: number;
+    commentCount: number;
+    shareCount: number;
+  };
+  category: string;
+  actorUsed: ActorType;
+  warningFlags: string[];
+  rawData: any;
+}
+
 // Database Types
 export interface VideoDocument {
   videoId: string;
@@ -74,6 +96,7 @@ export interface VideoDocument {
     shareCount: number;
   };
   category: string;
+  actorUsed: ActorType;
   rawData?: TikTokVideo;
 }
 
@@ -81,14 +104,27 @@ export interface RunDocument {
   runId: string;
   actorId: string;
   profileHandle: string;
+  reportDate: string; // YYYY-MM-DD (critical for Circuit Breaker)
   startedAt: Date;
   finishedAt?: Date;
   status: 'SUCCEEDED' | 'FAILED' | 'PARTIAL';
-  itemsFetched: number;
+  actorUsed: ActorType;
+  fallbackReason: FallbackReason;
+  circuitBreakerSuppressed: boolean;
+  itemsFetchedRaw: number; // Before filtering
+  itemsInRange: number; // After filtering to yesterday
+  itemsFetched: number; // Deprecated, kept for backward compatibility
   itemsInserted: number;
   itemsUpdated: number;
   error?: string;
   datasetId: string;
+  warningFlags?: string[];
+  // Data Quality metrics (v2.1.0)
+  missingCreateTimePct?: number;
+  missingUrlPct?: number;
+  // Empty Day tracking (v2.1.0)
+  emptyDay?: boolean;
+  emptyDayStreak?: number;
 }
 
 export interface ReportDocument {
@@ -100,14 +136,24 @@ export interface ReportDocument {
   text: string;
   videoIds: string[];
   status: 'ok' | 'warning' | 'error';
-  warningMessage?: string;
+  actorUsed: ActorType;
+  warningFlags: string[];
+  // Empty Day tracking (v2.1.0)
+  emptyDay?: boolean;
+  emptyDayStreak?: number;
+  // Email tracking (v2.2.0)
+  emailStatus?: 'PENDING' | 'SENT' | 'FAILED';
+  emailSentAt?: Date;
+  emailMessageId?: string;
+  emailError?: string;
 }
 
 // Configuration Type
 export interface Config {
   apify: {
     token: string;
-    actorId: string;
+    primaryActorId: string;
+    fallbackActorId: string;
   };
   mongodb: {
     uri: string;
@@ -117,11 +163,33 @@ export interface Config {
     maxPosts: number;
     windowHours: number;
     timezone: string;
+    lowResultsThreshold: number;
   };
   system: {
     nodeEnv: string;
     logLevel: string;
     backupRetentionDays: number;
+    runTimeoutMinutes: number;
+    pollIntervalSeconds: number;
+    maxRetries: number;
+    lockTtlMinutes: number;
+  };
+  circuitBreaker: {
+    fallbackMaxPer48Hours: number;
+  };
+  dataQuality: {
+    maxMissingCreateTimePct: number;
+    maxMissingUrlPct: number;
+  };
+  email?: {
+    provider: string;
+    brevoApiKey: string;
+    from: string;
+    fromName: string;
+    to: string;
+    cc?: string;
+    bcc?: string;
+    subjectPrefix: string;
   };
 }
 
@@ -129,9 +197,68 @@ export interface Config {
 export interface PipelineResult {
   success: boolean;
   runId?: string;
-  itemsFetched: number;
+  actorUsed: ActorType;
+  fallbackReason: FallbackReason;
+  circuitBreakerSuppressed: boolean;
+  itemsFetchedRaw: number;
+  itemsInRange: number;
   itemsInserted: number;
   itemsUpdated: number;
   reportGenerated: boolean;
+  warningFlags: string[];
+  error?: string;
+}
+
+// Actor Run Result
+export interface ActorRunResult {
+  runId: string;
+  status: 'READY' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'TIMING-OUT' | 'TIMED-OUT' | 'ABORTING' | 'ABORTED';
+  datasetId: string;
+  items: any[];
+  actorId: string;
+}
+
+// Lock Document (v2.1.0 - Concurrency Protection)
+export interface LockDocument {
+  _id: string; // Format: ${profileHandle}:${reportDate}
+  lockedAt: Date;
+  expiresAt: Date;
+}
+
+// Data Quality Check Result (v2.1.0)
+export interface DataQualityResult {
+  missingCreateTimeCount: number;
+  missingUrlCount: number;
+  itemsFetchedRaw: number;
+  itemsInRange: number;
+  missingCreateTimePct: number;
+  missingUrlPct: number;
+  hasIssue: boolean;
+}
+
+// Email Types (v2.2.0)
+export interface BrevoEmailRequest {
+  sender: {
+    name: string;
+    email: string;
+  };
+  to: Array<{ email: string; name?: string }>;
+  cc?: Array<{ email: string; name?: string }>;
+  bcc?: Array<{ email: string; name?: string }>;
+  subject: string;
+  textContent: string;
+  attachment?: Array<{
+    name: string;
+    content: string; // base64
+  }>;
+}
+
+export interface BrevoEmailResponse {
+  messageId: string;
+}
+
+export interface SendEmailResult {
+  success: boolean;
+  messageId?: string;
   error?: string;
 }

@@ -124,6 +124,51 @@ export async function saveReport(reportData: ReportDocument): Promise<void> {
 }
 
 /**
+ * Update report email status (v2.2.0)
+ */
+export async function updateReportEmailStatus(
+  profileHandle: string,
+  reportDate: string,
+  emailStatus: 'PENDING' | 'SENT' | 'FAILED',
+  emailMessageId?: string,
+  emailError?: string
+): Promise<void> {
+  try {
+    await retryDatabase(async () => {
+      const updates: any = {
+        emailStatus,
+      };
+
+      if (emailStatus === 'SENT') {
+        updates.emailSentAt = new Date();
+        if (emailMessageId) {
+          updates.emailMessageId = emailMessageId;
+        }
+      } else if (emailStatus === 'FAILED') {
+        if (emailError) {
+          updates.emailError = emailError;
+        }
+      }
+
+      await Report.findOneAndUpdate(
+        { profileHandle, reportDate },
+        { $set: updates }
+      );
+    }, 'update report email status');
+
+    logInfo(`Report email status updated: ${emailStatus}`, {
+      reportDate,
+      profileHandle,
+      emailMessageId,
+    });
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    alertDatabaseOperationFailed('updateReportEmailStatus', err);
+    throw err;
+  }
+}
+
+/**
  * Get videos by profile and date range
  */
 export async function getVideosByDateRange(
@@ -212,13 +257,44 @@ export async function getDatabaseStats(): Promise<{
 }
 
 /**
+ * Count fallback runs in the last 48 hours
+ * Used for Circuit Breaker logic
+ */
+export async function countFallbackRunsIn48Hours(
+  profileHandle: string,
+  reportDate: string
+): Promise<number> {
+  try {
+    return await retryDatabase(async () => {
+      const reportDateObj = new Date(reportDate);
+      const fortyEightHoursAgo = new Date(reportDateObj);
+      fortyEightHoursAgo.setHours(fortyEightHoursAgo.getHours() - 48);
+
+      return await Run.countDocuments({
+        profileHandle,
+        actorUsed: 'fallback',
+        reportDate: {
+          $gte: fortyEightHoursAgo.toISOString().split('T')[0],
+          $lt: reportDate,
+        },
+      });
+    }, 'count fallback runs in 48h');
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    alertDatabaseOperationFailed('countFallbackRunsIn48Hours', err);
+    return 0; // Return 0 on error (fail-safe)
+  }
+}
+
+/**
  * Convert TikTok API video to VideoDocument
  */
 export function convertTikTokVideoToDocument(
   video: TikTokVideo,
   profileHandle: string,
   runId: string,
-  category: string = 'Latest'
+  category: string = 'Latest',
+  actorUsed: 'primary' | 'fallback' = 'primary'
 ): Partial<VideoDocument> {
   return {
     videoId: video.id,
@@ -235,6 +311,95 @@ export function convertTikTokVideoToDocument(
       shareCount: video.shareCount || 0,
     },
     category,
+    actorUsed,
     rawData: video,
   };
+}
+
+/**
+ * Convert NormalizedVideo to VideoDocument
+ */
+export function convertNormalizedToDocument(
+  video: any,
+  profileHandle: string,
+  runId: string
+): Partial<VideoDocument> {
+  return {
+    videoId: video.videoId,
+    profileHandle,
+    text: video.text,
+    webVideoUrl: video.webVideoUrl,
+    createTimeISO: video.createTimeISO,
+    scrapedAt: new Date(),
+    runId,
+    metrics: video.metrics,
+    category: video.category,
+    actorUsed: video.actorUsed,
+    rawData: video.rawData,
+  };
+}
+
+/**
+ * Calculate empty day streak (v2.1.0)
+ * 
+ * Counts consecutive days backwards from reportDate where:
+ * - itemsInRange == 0
+ * - status == 'ok' (meaning it's a legitimate empty day, not a technical failure)
+ * 
+ * This helps identify suspicious patterns:
+ * - 1 empty day: normal (holiday, Shabbat)
+ * - 2-3 empty days: suspicious (alert recommended)
+ * - 5+ empty days: very suspicious (may need fallback or manual intervention)
+ * 
+ * @param profileHandle - Profile to check
+ * @param reportDate - Current report date (YYYY-MM-DD)
+ * @returns Number of consecutive empty days (including current day if empty)
+ */
+export async function getEmptyDayStreak(
+  profileHandle: string,
+  reportDate: string
+): Promise<number> {
+  try {
+    return await retryDatabase(async () => {
+      let streak = 0;
+      const currentDate = new Date(reportDate);
+      
+      // Look back up to 14 days
+      for (let i = 0; i < 14; i++) {
+        // Calculate the date to check (going backwards)
+        const checkDate = new Date(currentDate);
+        checkDate.setDate(checkDate.getDate() - i);
+        const checkDateStr = checkDate.toISOString().split('T')[0];
+        
+        // Find the run for this date
+        const run = await Run.findOne({
+          profileHandle,
+          reportDate: checkDateStr,
+        })
+          .sort({ startedAt: -1 }) // Get latest run for that date
+          .lean();
+        
+        // If no run found, stop counting (data gap)
+        if (!run) {
+          break;
+        }
+        
+        // Check if it's an empty day with OK status
+        const isEmptyDay = run.itemsInRange === 0 && run.status === 'SUCCEEDED';
+        
+        if (isEmptyDay) {
+          streak++;
+        } else {
+          // Non-empty day found, stop counting
+          break;
+        }
+      }
+      
+      return streak;
+    }, 'calculate empty day streak');
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    alertDatabaseOperationFailed('getEmptyDayStreak', err);
+    return 0; // Return 0 on error (fail-safe)
+  }
 }

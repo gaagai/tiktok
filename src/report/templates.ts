@@ -28,15 +28,17 @@ export function generateReportHeader(
   reportDate: string,
   targetDate: string, // YYYY-MM-DD of videos (yesterday)
   totalVideos: number,
-  timezone: string
+  timezone: string,
+  actorUsed?: 'primary' | 'fallback'
 ): string {
   const reportDateFormatted = formatDateIsrael(reportDate || new Date().toISOString(), timezone);
   const targetDateFormatted = formatDateIsrael(targetDate || new Date().toISOString(), timezone);
+  const actorLine = actorUsed ? `מקור נתונים: ${actorUsed === 'primary' ? 'Primary Actor' : 'Fallback Actor'}\n` : '';
   
   return `📊 דוח יומי - TikTok @${profileHandle}
 תאריך הרצה: ${reportDateFormatted}
 סרטונים מתאריך: ${targetDateFormatted} (אתמול)
-סה"כ סרטונים: ${totalVideos}
+${actorLine}סה"כ סרטונים: ${totalVideos}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 }
@@ -106,16 +108,18 @@ export function generateEmptyReport(
   reportDate: string,
   targetDate: string, // YYYY-MM-DD or formatted date string
   timezone: string,
-  reason?: string
+  reason?: string,
+  actorUsed?: 'primary' | 'fallback'
 ): string {
   const reportDateFormatted = formatDateIsrael(reportDate || new Date().toISOString(), timezone);
   const targetDateFormatted = formatDateIsrael(targetDate || new Date().toISOString(), timezone);
   const reasonText = reason ? `\nסיבה: ${reason}` : '';
+  const actorLine = actorUsed ? `מקור נתונים: ${actorUsed === 'primary' ? 'Primary Actor' : 'Fallback Actor'}\n` : '';
   
   return `📊 דוח יומי - TikTok @${profileHandle}
 תאריך הרצה: ${reportDateFormatted}
 סרטונים מתאריך: ${targetDateFormatted} (אתמול)
-סה"כ סרטונים: 0
+${actorLine}סה"כ סרטונים: 0
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
