@@ -354,4 +354,3 @@ export async function createIndexes(): Promise<void> {
   ]);
   console.log("✅ Database indexes created");
 }
-// nnn
