@@ -2,8 +2,13 @@
  * Mongoose schemas and models
  */
 
-import mongoose, { Schema, Model } from 'mongoose';
-import { VideoDocument, RunDocument, ReportDocument, LockDocument } from '../types/index.js';
+import mongoose, { Schema, Model } from "mongoose";
+import {
+  VideoDocument,
+  RunDocument,
+  ReportDocument,
+  LockDocument,
+} from "../types/index.js";
 
 // Video Schema
 const videoSchema = new Schema<VideoDocument>(
@@ -50,13 +55,13 @@ const videoSchema = new Schema<VideoDocument>(
     category: {
       type: String,
       required: true,
-      default: 'Latest',
+      default: "Latest",
     },
     actorUsed: {
       type: String,
-      enum: ['primary', 'fallback'],
+      enum: ["primary", "fallback"],
       required: false,
-      default: 'primary',
+      default: "primary",
     },
     rawData: {
       type: Schema.Types.Mixed,
@@ -65,7 +70,7 @@ const videoSchema = new Schema<VideoDocument>(
   },
   {
     timestamps: true,
-    collection: 'videos',
+    collection: "videos",
   }
 );
 
@@ -107,18 +112,18 @@ const runSchema = new Schema<RunDocument>(
     },
     status: {
       type: String,
-      enum: ['SUCCEEDED', 'FAILED', 'PARTIAL'],
+      enum: ["SUCCEEDED", "FAILED", "PARTIAL"],
       required: true,
     },
     actorUsed: {
       type: String,
-      enum: ['primary', 'fallback'],
+      enum: ["primary", "fallback"],
       required: false,
-      default: 'primary',
+      default: "primary",
     },
     fallbackReason: {
       type: String,
-      enum: ['FAILED', 'ZERO_RESULTS', 'LOW_RESULTS', null],
+      enum: ["FAILED", "ZERO_RESULTS", "LOW_RESULTS", null],
       required: false,
       default: null,
     },
@@ -188,7 +193,7 @@ const runSchema = new Schema<RunDocument>(
   },
   {
     timestamps: true,
-    collection: 'runs',
+    collection: "runs",
   }
 );
 
@@ -235,15 +240,15 @@ const reportSchema = new Schema<ReportDocument>(
     },
     status: {
       type: String,
-      enum: ['ok', 'warning', 'error'],
+      enum: ["ok", "warning", "error"],
       required: true,
-      default: 'ok',
+      default: "ok",
     },
     actorUsed: {
       type: String,
-      enum: ['primary', 'fallback'],
+      enum: ["primary", "fallback"],
       required: false,
-      default: 'primary',
+      default: "primary",
     },
     warningFlags: {
       type: [String],
@@ -264,7 +269,7 @@ const reportSchema = new Schema<ReportDocument>(
     // Email tracking (v2.2.0)
     emailStatus: {
       type: String,
-      enum: ['PENDING', 'SENT', 'FAILED'],
+      enum: ["PENDING", "SENT", "FAILED"],
       required: false,
     },
     emailSentAt: {
@@ -282,7 +287,7 @@ const reportSchema = new Schema<ReportDocument>(
   },
   {
     timestamps: true,
-    collection: 'reports',
+    collection: "reports",
   }
 );
 
@@ -304,12 +309,11 @@ const lockSchema = new Schema<LockDocument>(
     expiresAt: {
       type: Date,
       required: true,
-      index: true, // TTL index
     },
   },
   {
     timestamps: false,
-    collection: 'locks',
+    collection: "locks",
   }
 );
 
@@ -318,22 +322,22 @@ lockSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Export models
 export const Video: Model<VideoDocument> = mongoose.model<VideoDocument>(
-  'Video',
+  "Video",
   videoSchema
 );
 
 export const Run: Model<RunDocument> = mongoose.model<RunDocument>(
-  'Run',
+  "Run",
   runSchema
 );
 
 export const Report: Model<ReportDocument> = mongoose.model<ReportDocument>(
-  'Report',
+  "Report",
   reportSchema
 );
 
 export const Lock: Model<LockDocument> = mongoose.model<LockDocument>(
-  'Lock',
+  "Lock",
   lockSchema
 );
 
@@ -341,12 +345,12 @@ export const Lock: Model<LockDocument> = mongoose.model<LockDocument>(
  * Create all indexes
  */
 export async function createIndexes(): Promise<void> {
-  console.log('Creating database indexes...');
+  console.log("Creating database indexes...");
   await Promise.all([
     Video.createIndexes(),
     Run.createIndexes(),
     Report.createIndexes(),
     Lock.createIndexes(),
   ]);
-  console.log('✅ Database indexes created');
+  console.log("✅ Database indexes created");
 }
