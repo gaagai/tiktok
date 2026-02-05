@@ -175,8 +175,15 @@ export class ApifyClient {
       
       // Add date filters if provided (for yesterday's videos only)
       if (dateFilter?.yesterdayDate) {
-        input.since = dateFilter.yesterdayDate;
-        input.until = dateFilter.yesterdayDate;
+        // apidojo uses: since >= date, until < date
+        // To get only yesterday's videos: since=yesterday, until=today
+        const yesterday = new Date(dateFilter.yesterdayDate);
+        const today = new Date(yesterday);
+        today.setDate(today.getDate() + 1);
+        const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD
+        
+        input.since = dateFilter.yesterdayDate;  // Start from yesterday (inclusive)
+        input.until = todayString;                // Until today (exclusive)
       }
       
       logInfo('Using apidojo actor format', { 
