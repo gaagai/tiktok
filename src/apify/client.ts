@@ -159,13 +159,31 @@ export class ApifyClient {
     datasetId: string;
     items: ApifyDatasetItem[];
   }> {
+    // Determine which actor is being used
+    const targetActorId = actorId || this.defaultActorId || '';
+    
+    // Build input based on actor type
+    let input: ApifyActorInput;
+    
+    if (targetActorId.includes('apidojo')) {
+      // apidojo/tiktok-profile-scraper uses: usernames, maxItems
+      input = {
+        usernames: [profileHandle.replace('@', '')], // Remove @ if present
+        maxItems: maxVideos,
+      };
+      logInfo('Using apidojo actor format', { usernames: input.usernames, maxItems: input.maxItems });
+    } else {
+      // clockworks/tiktok-profile-scraper and others use: profiles, resultsPerPage
+      input = {
+        profiles: [profileHandle.replace('@', '')], // Remove @ if present
+        resultsPerPage: maxVideos,
+        profileScrapeSections: ['videos'],
+      };
+      logInfo('Using clockworks actor format', { profiles: input.profiles, resultsPerPage: input.resultsPerPage });
+    }
+
     // Start the run
-    const startResponse = await this.startRun({
-      profiles: [profileHandle],
-      maxVideos,
-      resultsPerPage: 200,
-      sections: ['videos'],
-    }, actorId);
+    const startResponse = await this.startRun(input, actorId);
 
     const runId = startResponse.data.id;
     const datasetId = startResponse.data.defaultDatasetId;

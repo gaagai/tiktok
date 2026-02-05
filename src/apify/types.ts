@@ -3,9 +3,18 @@
  */
 
 export interface ApifyActorInput {
-  profiles: string[];
-  maxVideos: number;
+  // For clockworks/tiktok-profile-scraper and similar actors
+  profiles?: string[];
   resultsPerPage?: number;
+  profileScrapeSections?: string[];
+  
+  // For apidojo/tiktok-profile-scraper
+  usernames?: string[];
+  startUrls?: string[];
+  maxItems?: number;
+  
+  // Legacy/deprecated (kept for backward compatibility)
+  maxVideos?: number;
   sections?: string[];
 }
 
