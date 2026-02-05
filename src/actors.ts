@@ -30,7 +30,13 @@ export async function runPrimary(
   const client = new ApifyClient(config.apify.token, actorId);
   
   try {
-    const result = await client.executeScrapeRun(profileHandle, maxPosts);
+    // Pass reportDate as date filter to fetch only yesterday's videos
+    const result = await client.executeScrapeRun(
+      profileHandle, 
+      maxPosts,
+      undefined, // actorId already set in constructor
+      { yesterdayDate: reportDate }
+    );
     
     return {
       runId: result.runId,
@@ -69,7 +75,13 @@ export async function runFallback(
   const client = new ApifyClient(config.apify.token, actorId);
   
   try {
-    const result = await client.executeScrapeRun(profileHandle, maxPosts);
+    // Pass reportDate as date filter to fetch only yesterday's videos
+    const result = await client.executeScrapeRun(
+      profileHandle, 
+      maxPosts,
+      undefined, // actorId already set in constructor
+      { yesterdayDate: reportDate }
+    );
     
     return {
       runId: result.runId,

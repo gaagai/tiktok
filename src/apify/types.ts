@@ -7,11 +7,15 @@ export interface ApifyActorInput {
   profiles?: string[];
   resultsPerPage?: number;
   profileScrapeSections?: string[];
+  oldestPostDateUnified?: string; // Date filter: videos after this date (YYYY-MM-DD or number of days)
+  newestPostDate?: string; // Date filter: videos before this date (YYYY-MM-DD)
   
   // For apidojo/tiktok-profile-scraper
   usernames?: string[];
   startUrls?: string[];
   maxItems?: number;
+  since?: string; // Date filter: posts older than this date (YYYY-MM-DD)
+  until?: string; // Date filter: posts newer than this date (YYYY-MM-DD)
   
   // Legacy/deprecated (kept for backward compatibility)
   maxVideos?: number;

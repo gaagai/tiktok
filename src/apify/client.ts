@@ -152,7 +152,8 @@ export class ApifyClient {
   async executeScrapeRun(
     profileHandle: string,
     maxVideos: number = 50,
-    actorId?: string
+    actorId?: string,
+    dateFilter?: { yesterdayDate: string } // Optional date filter for yesterday
   ): Promise<{
     runId: string;
     status: ApifyRunStatus;
@@ -166,20 +167,44 @@ export class ApifyClient {
     let input: ApifyActorInput;
     
     if (targetActorId.includes('apidojo')) {
-      // apidojo/tiktok-profile-scraper uses: usernames, maxItems
+      // apidojo/tiktok-profile-scraper uses: usernames, maxItems, since, until
       input = {
         usernames: [profileHandle.replace('@', '')], // Remove @ if present
         maxItems: maxVideos,
       };
-      logInfo('Using apidojo actor format', { usernames: input.usernames, maxItems: input.maxItems });
+      
+      // Add date filters if provided (for yesterday's videos only)
+      if (dateFilter?.yesterdayDate) {
+        input.since = dateFilter.yesterdayDate;
+        input.until = dateFilter.yesterdayDate;
+      }
+      
+      logInfo('Using apidojo actor format', { 
+        usernames: input.usernames, 
+        maxItems: input.maxItems,
+        since: input.since,
+        until: input.until,
+      });
     } else {
-      // clockworks/tiktok-profile-scraper and others use: profiles, resultsPerPage
+      // clockworks/tiktok-profile-scraper and others use: profiles, resultsPerPage, oldestPostDateUnified, newestPostDate
       input = {
         profiles: [profileHandle.replace('@', '')], // Remove @ if present
         resultsPerPage: maxVideos,
         profileScrapeSections: ['videos'],
       };
-      logInfo('Using clockworks actor format', { profiles: input.profiles, resultsPerPage: input.resultsPerPage });
+      
+      // Add date filters if provided (for yesterday's videos only)
+      if (dateFilter?.yesterdayDate) {
+        input.oldestPostDateUnified = dateFilter.yesterdayDate;
+        input.newestPostDate = dateFilter.yesterdayDate;
+      }
+      
+      logInfo('Using clockworks actor format', { 
+        profiles: input.profiles, 
+        resultsPerPage: input.resultsPerPage,
+        oldestPostDateUnified: input.oldestPostDateUnified,
+        newestPostDate: input.newestPostDate,
+      });
     }
 
     // Start the run
