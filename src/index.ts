@@ -76,11 +76,11 @@ async function main(): Promise<void> {
     process.exit(0);
   });
 
-  // Schedule: Run daily at 7:00 AM Israel time
-  const cronExpression = '0 7 * * *'; // Every day at 7:00 AM
+  // Schedule: Run daily at 00:01 (1 minute after midnight) Israel time
+  const cronExpression = '1 0 * * *'; // Every day at 00:01
   
   console.log(`🕐 Scheduling daily scraper:`);
-  console.log(`   Schedule: ${cronExpression} (7:00 AM daily)`);
+  console.log(`   Schedule: ${cronExpression} (00:01 - 1 minute after midnight)`);
   console.log(`   Timezone: ${timezone}`);
   console.log(`   Profile: ${config.scraper.profileHandle}`);
   console.log('');
@@ -97,7 +97,7 @@ async function main(): Promise<void> {
   logSuccess('Scheduler initialized successfully', {
     schedule: cronExpression,
     timezone,
-    nextRun: 'Every day at 7:00 AM',
+    nextRun: 'Every day at 00:01 (1 minute after midnight)',
   });
 
   console.log('✅ Scheduler is running. Waiting for next execution...');

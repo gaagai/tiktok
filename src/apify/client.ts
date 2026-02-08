@@ -167,30 +167,17 @@ export class ApifyClient {
     let input: ApifyActorInput;
     
     if (targetActorId.includes('apidojo')) {
-      // apidojo/tiktok-profile-scraper uses: usernames, maxItems, since, until
+      // apidojo/tiktok-profile-scraper uses: usernames, maxItems
+      // NOTE: Date filters (since/until) are NOT used because they don't work reliably.
+      // The system will filter by date after fetching results.
       input = {
         usernames: [profileHandle.replace('@', '')], // Remove @ if present
         maxItems: maxVideos,
       };
       
-      // Add date filters if provided (for yesterday's videos only)
-      if (dateFilter?.yesterdayDate) {
-        // apidojo uses: since >= date, until < date
-        // To get only yesterday's videos: since=yesterday, until=today
-        const yesterday = new Date(dateFilter.yesterdayDate);
-        const today = new Date(yesterday);
-        today.setDate(today.getDate() + 1);
-        const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD
-        
-        input.since = dateFilter.yesterdayDate;  // Start from yesterday (inclusive)
-        input.until = todayString;                // Until today (exclusive)
-      }
-      
-      logInfo('Using apidojo actor format', { 
+      logInfo('Using apidojo actor format (no date filters - will filter post-fetch)', { 
         usernames: input.usernames, 
         maxItems: input.maxItems,
-        since: input.since,
-        until: input.until,
       });
     } else {
       // clockworks/tiktok-profile-scraper and others use: profiles, resultsPerPage, oldestPostDateUnified, newestPostDate
