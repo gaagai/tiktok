@@ -3,21 +3,13 @@
  */
 
 import { VideoDocument } from '../types/index.js';
-import { formatDateIsrael, formatDateTimeIsrael } from '../utils/date.js';
+import { formatDateIsrael } from '../utils/date.js';
 
 /**
  * Format number with commas (e.g., 1,234,567)
  */
 function formatNumber(num: number): string {
   return num.toLocaleString('en-US');
-}
-
-/**
- * Truncate text to specified length
- */
-function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + '...';
 }
 
 /**
@@ -55,24 +47,13 @@ export function generateCategoryHeader(categoryName: string, count: number): str
  */
 export function generateVideoEntry(
   video: VideoDocument,
-  index: number,
-  timezone: string
+  index: number
 ): string {
-  const shortText = truncateText(video.text, 50);
   const fullText = video.text;
-  const dateTime = formatDateTimeIsrael(video.createTimeISO, timezone);
-  
-  const views = formatNumber(video.metrics.playCount);
-  const likes = formatNumber(video.metrics.diggCount);
-  const comments = formatNumber(video.metrics.commentCount);
-  const shares = formatNumber(video.metrics.shareCount);
 
   return `
-${index}. ${shortText}
-   טקסט מלא: ${fullText}
-   לינק: ${video.webVideoUrl}
-   צפיות: ${views} | לייקים: ${likes} | תגובות: ${comments} | שיתופים: ${shares}
-   תאריך: ${dateTime}`;
+${index}. ${fullText}
+   לינק: ${video.webVideoUrl}`;
 }
 
 /**

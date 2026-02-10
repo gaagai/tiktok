@@ -112,7 +112,7 @@ export function generateReportText(
     parts.push(generateCategoryHeader(category, categoryVideos.length));
 
     categoryVideos.forEach((video, index) => {
-      parts.push(generateVideoEntry(video, index + 1, timezone));
+      parts.push(generateVideoEntry(video, index + 1));
     });
   }
 
