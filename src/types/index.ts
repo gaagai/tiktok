@@ -191,6 +191,11 @@ export interface Config {
     bcc?: string;
     subjectPrefix: string;
   };
+  webhook?: {
+    url: string;
+    secret: string;
+    enabled: boolean;
+  };
 }
 
 // Pipeline Result
@@ -260,5 +265,28 @@ export interface BrevoEmailResponse {
 export interface SendEmailResult {
   success: boolean;
   messageId?: string;
+  error?: string;
+}
+
+// Webhook Types (v2.3.0)
+export interface WebhookVideo {
+  text: string;
+  url: string;
+}
+
+export interface WebhookPayload {
+  event: 'report.created';
+  reportDate: string;
+  profileHandle: string;
+  status: 'ok' | 'warning' | 'error';
+  generatedAt: string;
+  videosCount: number;
+  emptyDay: boolean;
+  videos: WebhookVideo[];
+}
+
+export interface WebhookResult {
+  success: boolean;
+  statusCode?: number;
   error?: string;
 }

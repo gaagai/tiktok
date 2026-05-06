@@ -33,6 +33,20 @@ function getEnvNumber(key: string, defaultValue: number): number {
 }
 
 /**
+ * Load webhook configuration (optional)
+ */
+function loadWebhookConfig(): Config['webhook'] | undefined {
+  const enabled = process.env.WEBHOOK_ENABLED === 'true';
+  if (!enabled) return undefined;
+
+  return {
+    url: getEnv('WEBHOOK_URL'),
+    secret: getEnv('WEBHOOK_SECRET'),
+    enabled: true,
+  };
+}
+
+/**
  * Load email configuration (optional)
  */
 function loadEmailConfig(): Config['email'] | undefined {
@@ -93,6 +107,7 @@ export function loadConfig(): Config {
       maxMissingUrlPct: parseFloat(getEnv('MAX_MISSING_URL_PCT', '0.3')),
     },
     email: loadEmailConfig(),
+    webhook: loadWebhookConfig(),
   };
 }
 
@@ -173,6 +188,16 @@ export function validateConfig(config: Config): void {
     // Validate BREVO_API_KEY is not empty
     if (config.email.brevoApiKey.length < 10) {
       throw new Error('BREVO_API_KEY appears to be invalid (too short)');
+    }
+  }
+
+  // Validate webhook configuration (if enabled)
+  if (config.webhook) {
+    if (!config.webhook.url.startsWith('http://') && !config.webhook.url.startsWith('https://')) {
+      throw new Error('WEBHOOK_URL must start with http:// or https://');
+    }
+    if (config.webhook.secret.length < 16) {
+      throw new Error('WEBHOOK_SECRET must be at least 16 characters');
     }
   }
 }

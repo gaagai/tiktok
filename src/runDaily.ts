@@ -35,6 +35,7 @@ import { normalizeItems } from './normalize.js';
 import { acquireLock, releaseLock } from './db/lock.js';
 import { calculateDataQuality, getDataQualityWarnings } from './utils/dataQuality.js';
 import { sendReportEmail, isEmailConfigured } from './email/index.js';
+import { sendWebhook, isWebhookConfigured } from './webhook/sender.js';
 
 /**
  * Execute the daily scraping pipeline with Primary/Fallback
@@ -403,6 +404,41 @@ export async function runDailyPipeline(): Promise<PipelineResult> {
       }
     } else {
       logInfo('Step 10.5: Email not configured - skipping email send');
+    }
+
+    // Step 10.7: Send webhook notification (v2.3.0)
+    if (isWebhookConfigured()) {
+      logInfo('Step 10.7: Sending webhook notification...');
+
+      try {
+        const webhookVideos = filteredItems.map((item) => ({
+          text: item.text,
+          url: item.webVideoUrl,
+        }));
+
+        const webhookResult = await sendWebhook(
+          config.webhook!.url,
+          config.webhook!.secret,
+          reportDoc,
+          webhookVideos,
+          config.system.maxRetries
+        );
+
+        if (webhookResult.success) {
+          logSuccess('Webhook notification delivered', {
+            statusCode: webhookResult.statusCode,
+          });
+        } else {
+          logError('Webhook delivery failed', new Error(webhookResult.error || 'Unknown error'));
+          // Non-fatal - pipeline continues
+        }
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        logError('Webhook process failed', err);
+        // Non-fatal - pipeline continues
+      }
+    } else {
+      logInfo('Step 10.7: Webhook not configured - skipping');
     }
 
     // Step 11: Save run record (v2.1.0 - Enhanced with data quality & empty day tracking)
